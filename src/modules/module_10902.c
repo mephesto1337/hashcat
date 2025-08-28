@@ -52,15 +52,8 @@ typedef struct pbewithsha256and256bitaes_cbc_bc
 
 typedef struct pbewithsha256and256bitaes_cbc_bc_tmp
 {
-  u32  iv_bytes[8];
-  u32  key_bytes[8];
-
-  u32  ipad[8];
-  u32  opad[8];
-
-  u32  dgst[32];
-  u32  out[32];
-
+  u32 iv_bytes[8];
+  u32 key_bytes[8];
 } pbewithsha256and256bitaes_cbc_bc_tmp_t;
 
 static const char *SIGNATURE_PBEWITHSHA256AND256BITAES_CBC_BC = "pbewithsha256and256bitaes-cbc-bc";
