@@ -5,6 +5,8 @@
 
 #define NEW_SIMD_CODE
 
+#define DEBUG_MESSAGES 0
+
 #ifdef KERNEL_STATIC
 #include M2S(INCLUDE_PATH/inc_vendor.h)
 #include M2S(INCLUDE_PATH/inc_types.h)
@@ -53,7 +55,7 @@ DECLSPEC void AES256_decrypt_cbc (PRIVATE_AS const u32 *ks1, PRIVATE_AS const u3
 
 
 
-#if 0
+#if DEBUG_MESSAGES > 0
 DECLSPEC void show_buf (PRIVATE_AS u32x *buf, PRIVATE_AS u32x len)
 {
   printf(" (%u) = ", len);
@@ -76,6 +78,15 @@ DECLSPEC void show_buf (PRIVATE_AS u32x *buf, PRIVATE_AS u32x len)
       break;
   }
 }
+#define SHOW_BUF(buf, len) \
+  do { \
+    if (get_global_id (0) == 0 && get_local_id(0) == 0) { \
+      printf("%s", #buf); \
+      show_buf(buf, len); \
+    } \
+  } while (0)
+#else
+#define SHOW_BUF(buf, len)
 #endif
 
 DECLSPEC void memcpy_utf16be (PRIVATE_AS u32x *dst, PRIVATE_AS const u32x *src, PRIVATE_AS u32x len)
@@ -133,8 +144,6 @@ KERNEL_FQ KERNEL_FA void m10902_init (KERN_ATTR_TMPS_ESALT (pbewithsha256and256b
   u32 p_offset = 0;
   u8* p_buf = (u8 *)p;
 
-  // printf("pw"); show_buf(pws[gid].i, pws[gid].pw_len);
-
   while (p_offset + pw_len < 64) {
     memcpy_utf16be((u32 *)&p_buf[p_offset], pws[gid].i, pw_len);
     p_offset += (pw_len + 1) << 1;
@@ -168,32 +177,14 @@ KERNEL_FQ KERNEL_FA void m10902_init (KERN_ATTR_TMPS_ESALT (pbewithsha256and256b
     tmps[gid].iv_bytes[i] = sha256_ctx.h[i];
   }
 
-#if 0
+#if DEBUG_MESSAGES > 0
   if (gid == 0) {
-    printf("p  "); show_buf(p, 64);
-    printf("s  "); show_buf(s, 64);
-    printf("i  "); show_buf(iv_id_bytes, 64);
-    printf("iv "); show_buf(tmps[gid].iv_bytes, 32);
-    printf("key"); show_buf(tmps[gid].key_bytes, 32);
-
-    u32 t[16] = {0}=;
-    t[0]  = 0x12345678;
-    sha256_init(&sha256_ctx);
-    sha256_update_swap(&sha256_ctx, t, 4);
-    sha256_final(&sha256_ctx);
-    printf("t "); show_buf(sha256_ctx.h, 32);
-
-    for (u32 i = 0; i < 8; i++) t[i] = sha256_ctx.h[i];
-    sha256_init(&sha256_ctx);
-    sha256_update(&sha256_ctx, t, 32);
-    sha256_final(&sha256_ctx);
-    printf("t2"); show_buf(sha256_ctx.h, 32);
-
-    for (u32 i = 0; i < 8; i++) t[i] = sha256_ctx.h[i];
-    sha256_init(&sha256_ctx);
-    sha256_update(&sha256_ctx, t, 32);
-    sha256_final(&sha256_ctx);
-    printf("t3"); show_buf(sha256_ctx.h, 32);
+    SHOW_BUF(pws[gid].i, pw_len);
+    SHOW_BUF(p, 64);
+    SHOW_BUF(s, 64);
+    printf("salt_iter = %u\n", salt_bufs[SALT_POS_HOST].salt_iter);
+    SHOW_BUF(tmps[gid].iv_bytes, 32);
+    SHOW_BUF(tmps[gid].key_bytes, 32);
   }
 #endif
 }
@@ -231,6 +222,8 @@ KERNEL_FQ KERNEL_FA void m10902_loop (KERN_ATTR_TMPS_ESALT (pbewithsha256and256b
     for (u32 i = 0; i < 8; i++) {
       key[i] = sha256_ctx.h[i];
     }
+    SHOW_BUF(key, 32);
+    SHOW_BUF(iv, 16);
   }
 
 
@@ -319,6 +312,10 @@ KERNEL_FQ KERNEL_FA void m10902_comp (KERN_ATTR_TMPS_ESALT (pbewithsha256and256b
     cipher_block[i] = esalt_bufs[DIGESTS_OFFSET_HOST].cipher[i];
   }
 
+  SHOW_BUF(key, 32);
+  SHOW_BUF(iv, 16);
+  SHOW_BUF(cipher_block, cipher_len);
+
   u32 ks[60];
   AES256_set_decrypt_key (ks, key, s_te0, s_te1, s_te2, s_te3, s_td0, s_td1, s_td2, s_td3);
 
@@ -326,16 +323,15 @@ KERNEL_FQ KERNEL_FA void m10902_comp (KERN_ATTR_TMPS_ESALT (pbewithsha256and256b
   sha256_ctx_t sha256_ctx;
   u32 cipher_offset = 0;
 
-#if 0
-  printf("key = "); show_buf(key, 32);
-  printf("iv  = "); show_buf(iv, 16);
-#endif
+  SHOW_BUF(key, 32);
+  SHOW_BUF(iv, 16);
 
   sha256_init(&sha256_ctx);
 
   u32 offset;
   for (offset = 0; offset + 4 < block_count; offset += 4) {
     AES256_decrypt_cbc(ks, &cipher_block[offset], out, iv, s_td0, s_td1, s_td2, s_td3, s_td4);
+    SHOW_BUF(out, 16);
     sha256_update(&sha256_ctx, out, 16);
   }
   // Last block remove padding
@@ -345,8 +341,10 @@ KERNEL_FQ KERNEL_FA void m10902_comp (KERN_ATTR_TMPS_ESALT (pbewithsha256and256b
   u32 outlen = 16;
   if (pad_len < 16) {
     sha256_update(&sha256_ctx, out, 16 - pad_len);
+    SHOW_BUF(out, 16 - pad_len);
   }
   sha256_final(&sha256_ctx);
+  SHOW_BUF(sha256_ctx.h, 32);
 
   const u32 r0 = sha256_ctx.h[0];
   const u32 r1 = sha256_ctx.h[1];
