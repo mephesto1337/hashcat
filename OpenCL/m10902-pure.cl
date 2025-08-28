@@ -186,10 +186,15 @@ KERNEL_FQ KERNEL_FA void m10902_init (KERN_ATTR_TMPS_ESALT (pbewithsha256and256b
 KERNEL_FQ KERNEL_FA void m10902_loop (KERN_ATTR_TMPS_ESALT (pbewithsha256and256bitaes_cbc_bc_tmp_t, pbewithsha256and256bitaes_cbc_bc_t))
 {
   const u64 gid = get_global_id (0);
+  const u32 iter_max = salt_bufs[SALT_POS_HOST].salt_iter;
+  u32 init_j = 0;
 
   if ((gid * VECT_SIZE) >= GID_CNT) return;
 
-  if (LOOP_POS + 1 == salt_bufs[SALT_POS_HOST].salt_iter) return;
+  // Hack to avoid last round event if salt_iter has a `- 1` in src/modules/module_10902.c
+  if (LOOP_POS + LOOP_CNT == iter_max) {
+    init_j = 1;
+  }
 
 
   u32x iv[16] = {0};
@@ -201,7 +206,7 @@ KERNEL_FQ KERNEL_FA void m10902_loop (KERN_ATTR_TMPS_ESALT (pbewithsha256and256b
     iv[i] = packv (tmps, iv_bytes, gid, i);
   }
 
-  for (u32 j = 0; j < LOOP_CNT; j++)
+  for (u32 j = init_j; j < LOOP_CNT; j++)
   {
     sha256_init(&sha256_ctx);
     sha256_update(&sha256_ctx, iv, 32);
