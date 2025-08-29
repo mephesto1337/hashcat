@@ -47,8 +47,6 @@ DECLSPEC void AES256_decrypt_cbc (PRIVATE_AS const u32 *ks1, PRIVATE_AS const u3
   iv[3] = in[3];
 }
 
-
-
 #if DEBUG_MESSAGES > 0
 DECLSPEC void show_buf (PRIVATE_AS u32x *buf, PRIVATE_AS u32x len)
 {
@@ -199,7 +197,7 @@ KERNEL_FQ KERNEL_FA void m10902_loop (KERN_ATTR_TMPS_ESALT (pbewithsha256and256b
 
   u32x iv[16] = {0};
   u32x key[16] = {0};
-  sha256_ctx_t sha256_ctx;
+  sha256_ctx_vector_t sha256_ctx_vector;
 
   for (u32 i = 0; i < 8; i++) {
     key[i] = packv (tmps, key_bytes, gid, i);
@@ -208,18 +206,18 @@ KERNEL_FQ KERNEL_FA void m10902_loop (KERN_ATTR_TMPS_ESALT (pbewithsha256and256b
 
   for (u32 j = init_j; j < LOOP_CNT; j++)
   {
-    sha256_init(&sha256_ctx);
-    sha256_update(&sha256_ctx, iv, 32);
-    sha256_final(&sha256_ctx);
+    sha256_init_vector(&sha256_ctx_vector);
+    sha256_update_vector(&sha256_ctx_vector, iv, 32);
+    sha256_final_vector(&sha256_ctx_vector);
     for (u32 i = 0; i < 8; i++) {
-      iv[i] = sha256_ctx.h[i];
+      iv[i] = sha256_ctx_vector.h[i];
     }
 
-    sha256_init(&sha256_ctx);
-    sha256_update(&sha256_ctx, key, 32);
-    sha256_final(&sha256_ctx);
+    sha256_init_vector(&sha256_ctx_vector);
+    sha256_update_vector(&sha256_ctx_vector, key, 32);
+    sha256_final_vector(&sha256_ctx_vector);
     for (u32 i = 0; i < 8; i++) {
-      key[i] = sha256_ctx.h[i];
+      key[i] = sha256_ctx_vector.h[i];
     }
     SHOW_BUF(key, 32);
     SHOW_BUF(iv, 16);
